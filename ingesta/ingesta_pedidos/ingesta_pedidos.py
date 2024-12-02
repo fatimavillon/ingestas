@@ -93,10 +93,12 @@ for page in paginator.paginate(**operation_parameters):
     items = page['Items']
 
     products = pd.DataFrame.from_records(items)
-    products['created_at'] = pd.to_datetime(products['created_at'])
 
-    if 'data' in products.columns:
-        product_data = pd.json_normalize(products['data']).join(products['product_id'])
+    if 'created_at' in products.columns:
+        products['created_at'] = pd.to_datetime(products['created_at'], errors='coerce')
+
+    if 'data' in products.columns and 'product_id' in products.columns:
+        product_data = pd.json_normalize(products['data']).join(products[['product_id']])
         products.drop(columns=['data'], inplace=True)
     else:
         product_data = pd.DataFrame()
