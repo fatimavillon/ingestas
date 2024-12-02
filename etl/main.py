@@ -135,6 +135,56 @@ def safely_convert_to_json(data_str):
         error(f"Error convirtiendo a JSON: {data_str} - {e}")
         return {}
 
+def transform_reports(data):
+    transformed_data = []
+    for record in data:
+        tenant_id = record["tenant_id"]
+        report_id = record["report_id"]
+        data_json = safely_convert_to_json(record["data"])
+        transformed_data.append({
+            "tenant_id": tenant_id,
+            "report_id": report_id,
+            "total_sales": data_json.get("total_sales", 0),
+            "total_items": data_json.get("total_items", 0),
+        })
+    return transformed_data
+
+def transform_billing(data):
+    transformed_data = []
+    for record in data:
+        payment_json = safely_convert_to_json(record["payment_details"])
+        transformed_data.append({
+            "invoice_id": record["invoice_id"],
+            "tenant_id": record["tenant_id"],
+            "order_id": record["order_id"],
+            "method": payment_json.get("method", ""),
+            "amount": payment_json.get("amount", 0),
+            "status": record["status"],
+        })
+    return transformed_data
+
+def transform_inventory(data):
+    return [
+        {
+            "product_id": record["product_id"],
+            "tenant_id": record["tenant_id"],
+            "stock_available": float(record["stock_available"]),
+            "last_update": record["last_update"],
+        }
+        for record in data
+    ]
+
+def transform_productos(data):
+    return [
+        {
+            "product_id": record["product_id"],
+            "tenant_id": record["tenant_id"],
+            "name": record["name"],
+            "price": float(record["price"]),
+            "description": record["description"],
+        }
+        for record in data
+    ]
 def transform_order(data):
     orders = []
     order_products_set = set()
@@ -179,21 +229,35 @@ def etl_process():
     }
     for table_name, query in queries.items():
         try:
-            info(f"Procesando tabla: {table_name}")
+            logger.info(f"Procesando tabla: {table_name}")
             query_execution_id = execute_athena_query(query)
             if not wait_for_query_to_complete(query_execution_id):
-                warning(f"Consulta para {table_name} no completada.")
+                logger.warning(f"Consulta para {table_name} no completada.")
                 continue
             data = get_query_results_from_s3(query_execution_id)
             if not data:
-                warning(f"No se encontraron datos para la tabla {table_name}.")
+                logger.warning(f"No se encontraron datos para la tabla {table_name}.")
                 continue
-            if table_name == "Order":
+            if table_name == "Reports":
+                transformed_data = transform_reports(data)
+                load_to_mysql(transformed_data, "Reports")
+            elif table_name == "Billing":
+                transformed_data = transform_billing(data)
+                load_to_mysql(transformed_data, "Billing")
+            elif table_name == "Inventory":
+                transformed_data = transform_inventory(data)
+                load_to_mysql(transformed_data, "Inventory")
+            elif table_name == "Order":
                 orders, order_products = transform_order(data)
                 load_to_mysql(orders, "Orders")
                 load_to_mysql(order_products, "OrderProductos")
+            elif table_name == "Productos":
+                transformed_data = transform_productos(data)
+                load_to_mysql(transformed_data, "Productos")
+            else:
+                logger.error(f"Transformación no definida para la tabla {table_name}.")
         except Exception as e:
-            error(f"Error procesando la tabla {table_name}: {e}")
+            logger.error(f"Error procesando la tabla {table_name}: {e}")
 
 if __name__ == "__main__":
     etl_process()
