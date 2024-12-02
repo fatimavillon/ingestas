@@ -1,0 +1,117 @@
+import copy
+import pandas as pd
+import boto3
+import os
+import sys
+from loguru import logger
+from boto3.dynamodb.types import TypeDeserializer
+from boto3.dynamodb.transform import TransformationInjector
+
+# Configuración de logging
+logs_file = "logs_output/ingesta_products.log"
+id = 'ingesta-products'
+logger.add(logs_file)
+
+def critical(message):
+    logger.critical(f"{id} - {message}")
+def info(message):
+    logger.info(f"{id} - {message}")
+def error(message):
+    logger.error(f"{id} - {message}")
+def warning(message):
+    logger.warning(f"{id} - {message}")
+def exit_program(early_exit=False):
+    if early_exit:
+        warning('Saliendo del programa antes de la ejecución debido a un error previo.')
+        sys.exit(1)
+    else:
+        info('Programa terminado exitosamente.')
+
+# Variables de entorno
+table_name = os.environ.get('TABLE_NAME')
+bucket_name = os.environ.get('BUCKET_NAME')
+
+if not table_name:
+    critical('No se encontró el nombre de la tabla.')
+    exit_program(True)
+if not bucket_name:
+    critical('No se encontró el nombre del bucket de S3.')
+    exit_program(True)
+
+# Conexión a servicios AWS
+try:
+    s3 = boto3.client('s3')
+    info('Conexión a S3 exitosa.')
+except Exception as e:
+    critical(f'No fue posible conectarse a S3. Excepción: {e}')
+    exit_program(True)
+
+try:
+    client = boto3.client('dynamodb', region_name='us-east-1')
+    info('Conexión a DynamoDB exitosa.')
+except Exception as e:
+    critical(f'No fue posible conectarse a DynamoDB. Excepción: {e}')
+    exit_program(True)
+
+# Configuración de DynamoDB
+paginator = client.get_paginator('scan')
+service_model = client._service_model.operation_model('Scan')
+trans = TransformationInjector(deserializer=TypeDeserializer())
+
+# Parámetros de operación
+operation_parameters = {
+    'TableName': table_name,
+}
+i = 0  # Contador de páginas
+
+# Procesar páginas
+for page in paginator.paginate(**operation_parameters):
+    original_last_evaluated_key = ""
+    if 'LastEvaluatedKey' in page:
+        original_last_evaluated_key = copy.copy(page['LastEvaluatedKey'])
+
+    # Transformar datos
+    trans.inject_attribute_value_output(page, service_model)
+    if original_last_evaluated_key:
+        page['LastEvaluatedKey'] = original_last_evaluated_key
+
+    items = page['Items']
+
+    # Convertir a DataFrame
+    products = pd.DataFrame.from_records(items)
+    products['created_at'] = pd.to_datetime(products['created_at'])
+
+    # Normalizar JSON anidado si aplica
+    if 'data' in products.columns:
+        product_data = pd.json_normalize(products['data']).join(products['product_id'])
+        products.drop(columns=['data'], inplace=True)
+    else:
+        product_data = pd.DataFrame()
+
+    # Guardar como JSON
+    product_file = f'products.json'
+    product_data_file = f'product_data.json'
+    products.to_json(product_file, orient='records', lines=True)
+    if not product_data.empty:
+        product_data.to_json(product_data_file, orient='records', lines=True)
+
+    # Subir a S3
+    s3_products_path = f'products/products{i}.json'
+    try:
+        s3.upload_file(product_file, bucket_name, s3_products_path)
+        info(f'Subido: {s3_products_path}')
+    except Exception as e:
+        error(f'Error al subir productos a S3. Excepción: {str(e)}')
+
+    if not product_data.empty:
+        s3_product_data_path = f'product_data/product_data{i}.json'
+        try:
+            s3.upload_file(product_data_file, bucket_name, s3_product_data_path)
+            info(f'Subido: {s3_product_data_path}')
+        except Exception as e:
+            error(f'Error al subir datos de productos a S3. Excepción: {str(e)}')
+
+    i += 1
+
+info(f'Proceso completado. Páginas procesadas: {i}')
+exit_program(False)
