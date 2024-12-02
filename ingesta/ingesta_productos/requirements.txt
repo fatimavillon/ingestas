@@ -10,3 +10,4 @@ s3transfer==0.10.3
 six==1.16.0
 tzdata==2024.2
 urllib3==1.26.20
+numpy==2.1.3
