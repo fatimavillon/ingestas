@@ -171,7 +171,11 @@ def transform_order(data):
 
 def etl_process():
     queries = {
-        "Order": 'SELECT * FROM "AwsDataCatalog"."catalogo"."orderservice-dev" LIMIT 10'
+        "Reports": 'SELECT * FROM "AwsDataCatalog"."catalogo"."api-reportes-dev"',
+        "Billing": 'SELECT * FROM "AwsDataCatalog"."catalogo"."billingservice-dev"',
+        "Inventory": 'SELECT * FROM "AwsDataCatalog"."catalogo"."inventoryservice-dev"',
+        "Order": 'SELECT * FROM "AwsDataCatalog"."catalogo"."orderservice-dev"',
+        "Productos": 'SELECT * FROM "AwsDataCatalog"."catalogo"."productservice-dev"'
     }
     for table_name, query in queries.items():
         try:
