@@ -1,3 +1,0 @@
-docker build -t etl .
-
-docker run --rm --name etl-container -v $HOME/.aws/credentials:/root/.aws/credentials:ro etl
