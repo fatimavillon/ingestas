@@ -1,0 +1,72 @@
+version: "3.8"
+
+services:
+  ingesta_facturacion:
+    build:
+      context: ./ingesta_facturacion
+      dockerfile: Dockerfile
+    container_name: ingesta_facturacion
+    env_file:
+      - .env
+    environment:
+      TABLE_NAME: billingService-dev
+      BUCKET_NAME: productos-catalogo
+    volumes:
+      - ./ingesta_facturacion:/app
+    command: python ingesta_facturacion.py
+
+  ingesta_inventario:
+    build:
+      context: ./ingesta_inventario
+      dockerfile: Dockerfile
+    container_name: ingesta_inventario
+    env_file:
+      - .env
+    environment:
+      TABLE_NAME: inventoryService-dev
+      BUCKET_NAME: productos-catalogo
+    volumes:
+      - ./ingesta_inventario:/app
+    command: python ingesta_inventario.py
+
+  ingesta_pedidos:
+    build:
+      context: ./ingesta_pedidos
+      dockerfile: Dockerfile
+    container_name: ingesta_pedidos
+    env_file:
+      - .env
+    environment:
+      TABLE_NAME: orderService-dev
+      BUCKET_NAME: productos-catalogo
+    volumes:
+      - ./ingesta_pedidos:/app
+    command: python ingesta_pedidos.py
+
+  ingesta_productos:
+    build:
+      context: ./ingesta_productos
+      dockerfile: Dockerfile
+    container_name: ingesta_productos
+    env_file:
+      - .env
+    environment:
+      TABLE_NAME: productService-dev
+      BUCKET_NAME: productos-catalogo
+    volumes:
+      - ./ingesta_productos:/app
+    command: python ingesta_productos.py
+
+  ingesta_reportes:
+    build:
+      context: ./ingesta_reportes
+      dockerfile: Dockerfile
+    container_name: ingesta_reportes
+    env_file:
+      - .env
+    environment:
+      TABLE_NAME: api-reportes-dev
+      BUCKET_NAME: productos-catalogo
+    volumes:
+      - ./ingesta_reportes:/app
+    command: python ingesta_reportes.py
