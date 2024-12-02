@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  etl:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: etl_service
+    env_file:
+      - .env
+    volumes:
+      - /home/ubuntu/logs:/logs_output
+    command: python main.py

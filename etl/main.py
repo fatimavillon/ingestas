@@ -6,7 +6,8 @@ import os
 import sys
 import csv
 from dotenv import load_dotenv
-from logging import getLogger, INFO, basicConfig
+from loguru import logger
+import time
 
 load_dotenv()
 
@@ -22,8 +23,8 @@ MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 MYSQL_PORT = int(os.getenv("MYSQL_PORT", 3306))
 
-basicConfig(level=INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = getLogger("ETL")
+logs_file = "/logs_output/etl_log.log"
+logger.add(logs_file)
 id = "ETL_Process"
 
 athena = boto3.client(
