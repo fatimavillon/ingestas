@@ -4,7 +4,6 @@ import pymysql
 import re
 import os
 import sys
-import csv
 from dotenv import load_dotenv
 from loguru import logger
 import time
@@ -83,16 +82,24 @@ def wait_for_query_to_complete(query_execution_id, max_retries=10, wait_time=5):
 
 def get_query_results_from_s3(query_execution_id):
     try:
-        file_key = f"{query_execution_id}.csv"
-        info(f"Buscando archivo en S3: {file_key}")
-        s3 = boto3.client("s3", region_name=AWS_REGION)
-        response = s3.get_object(Bucket="logs123123", Key=file_key)
-        content = response['Body'].read().decode('utf-8')
-        rows = list(csv.DictReader(content.splitlines()))
-        info(f"Resultados obtenidos: {len(rows)} filas.")
-        return rows
+        results = []
+        paginator = athena.get_paginator("get_query_results")
+        page_iterator = paginator.paginate(
+            QueryExecutionId=query_execution_id,
+            PaginationConfig={"PageSize": 1000}
+        )
+        for page in page_iterator:
+            rows = page["ResultSet"]["Rows"]
+            if not results:
+                column_info = [col["VarCharValue"] for col in rows[0]["Data"]]
+            for row in rows[1:]:
+                record = {column_info[i]: (row["Data"][i]["VarCharValue"] if "VarCharValue" in row["Data"][i] else None)
+                          for i in range(len(row["Data"]))}
+                results.append(record)
+        info(f"Resultados obtenidos: {len(results)} filas.")
+        return results
     except Exception as e:
-        error(f"Error obteniendo resultados desde S3: {e}")
+        error(f"Error obteniendo resultados desde Athena: {e}")
         exit_program(True)
 
 def load_to_mysql(data, table_name):
